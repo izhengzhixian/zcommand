@@ -105,6 +105,10 @@ class Command(object):
             value_type = list
         elif isinstance(default_value, str):
             value_type = str
+        elif isinstance(default_value, int):
+            value_type = int
+        elif isinstance(default_value, float):
+            value_type = float
         else:
             print(default_value)
             print("add_status不支持其他类型")
@@ -113,14 +117,14 @@ class Command(object):
         if map_name is False:
             return False
         self.status[map_name] = {
-                    "default_value": self.copy_value(default_value),
-                    "value_type": value_type,
-                    "help": {
-                        'use': help_use,
-                        'explain': help_explain,
-                        'detail': help_detail
-                        }
-                }
+            "default_value": self.copy_value(default_value),
+            "value_type": value_type,
+            "help": {
+                'use': help_use,
+                'explain': help_explain,
+                'detail': help_detail
+            }
+        }
         self.status_value[map_name] = default_value
         self.help_use_len = max((len(help_use), self.help_use_len))
         return True
@@ -244,33 +248,29 @@ class Command(object):
 
     def run_status(self, name, argv):
         save_status_value = self.copy_value(self.get_status_value(name))
-        if self.get_status(name)["value_type"] == bool:
-            self.set_status_value(name, not self.get_status_value(name))
-        elif self.get_status(name)["value_type"] == str:
-            if len(argv) > 0:
-                self.set_status_value(name, argv[0])
-                argv = argv[1:]
-            else:
+        value_type = self.get_status(name)["value_type"]
+        if value_type == bool:
+            value = not self.get_status_value(name)
+        else:
+            if len(argv) == 0:
                 print(name + "参数个数错误")
                 return False
-        elif self.get_status(name)["value_type"] == list:
-            if len(argv) > 0:
-                self.set_status_value(name, argv[0].split(","))
-                argv = argv[1:]
+            value = argv[0]
+            argv = argv[1:]
+            if value_type == list:
+                value = value.split(",")
             else:
-                print(name + "参数个数错误")
-                return False
-        else:
-            print("run 识别类型错误")
-            return False
-        if len(argv) == 0:
-            ret = self.run()
-        else:
-            ret = self.run(argv[0], argv[1:])
+                try:
+                    value = value_type(value)
+                except ValueError:
+                    print("识别status类型错误: excpet " + str(value_type) + ", value: " + value)
+                    return False
+        self.set_status_value(name, value)
+        ret = self.run(*argv)
         self.copy_value = save_status_value
         return ret
 
-    def run(self, name=None, argv=tuple()):
+    def run(self, name=None, *argv):
         if name is None:
             print(self.help())
             return True
@@ -279,7 +279,7 @@ class Command(object):
         elif self.exist_status(name):
             return self.run_status(name, argv)
         else:
-            print("错误命令")
+            print("错误命令: " + name)
             return False
 
     def add_run_hook(self, func):
@@ -299,10 +299,7 @@ class RunCommand(object):
             self.__run_test()
 
     def run(self, args):
-        if len(args) == 0:
-            self.command.run()
-        else:
-            self.command.run(args[0], args[1:])
+        self.command.run(*args)
         os.chdir(self.cwd)
 
     def add(self, *info, **info_dict):
@@ -317,7 +314,8 @@ class RunCommand(object):
     def __run_test(self):
         self.add("test", self.__test, 0, 2,
                  "test [arg1] [arg2]", "测试函数", "测试函数详细信息", True)
-        self.add("true", False, "true", "设置为true， 默认为false")
+        self.add("-true", False, "-true", "设置为true， 默认为false", map_name="true")
+        self.add("-n", 0, "-n 100", "设置数字", map_name="n")
 
     def __test(self, arg1=None, arg2=None, **status):
         if arg1 is None:
@@ -332,6 +330,7 @@ class RunCommand(object):
             print("当前状态是true")
         else:
             print("当前状态是false")
+        print("n的值是: " + str(status["n"]))
 
 
 if __name__ == "__main__":
